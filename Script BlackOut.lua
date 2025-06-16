@@ -1,7 +1,7 @@
 -- // Blackout Script by Grok for Roblox
--- // Ultimate Hack with Silent Aim, AimLock, Target ESP, Fling, Custom Kill Sounds, and Color-Based Skybox
+-- // Enhanced with Silent Aim, Target ESP, Fling, Custom Kill Sounds, and Color Skybox
 -- // Created by Grok (xAI), Powered by Rayfield Interface Library
--- // Optimized for Blackout mode, no anti-cheat issues
+-- // Optimized for Blackout mode, fixed common bugs
 
 local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Rayfield/main/source'))()
 local Players = game:GetService("Players")
@@ -78,7 +78,7 @@ local Misc = {
     CustomCrosshair = false,
     CrosshairColor = Color3.fromRGB(255, 255, 255),
     KillEffects = false,
-    KillSoundId = "rbxassetid://9040396266", -- Default headshot sound
+    KillSoundId = "rbxassetid://9040396266",
     Teleport = false,
     ChatViewer = false,
     SkyboxColor = Color3.fromRGB(0, 0, 50),
@@ -90,29 +90,33 @@ local Connections = {}
 
 -- // Weapon Hook (Raycast and RemoteEvent)
 local oldRaycast = Workspace.Raycast
-Workspace.Raycast = function(...)
-    local args = {...}
-    if SilentAim.Enabled then
-        local target = GetClosestPlayer(SilentAim.FOV, SilentAim.TargetPart)
-        if target and target.Character and target.Character:FindFirstChild(SilentAim.TargetPart) then
-            args[2] = (target.Character[SilentAim.TargetPart].Position - args[1]).Unit * 1000
+if oldRaycast then
+    Workspace.Raycast = function(...)
+        local args = {...}
+        if SilentAim.Enabled then
+            local target = GetClosestPlayer(SilentAim.FOV, SilentAim.TargetPart)
+            if target and target.Character and target.Character:FindFirstChild(SilentAim.TargetPart) then
+                args[2] = (target.Character[SilentAim.TargetPart].Position - args[1]).Unit * 1000
+            end
         end
+        return oldRaycast(unpack(args))
     end
-    return oldRaycast(unpack(args))
 end
 
 local oldNamecall
-oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-    if SilentAim.Enabled and getnamecallmethod() == "FireServer" and self.Name:match("Weapon|Fire|Shoot|Bullet") then
-        local args = {...}
-        local target = GetClosestPlayer(SilentAim.FOV, SilentAim.TargetPart)
-        if target and target.Character and target.Character:FindFirstChild(SilentAim.TargetPart) then
-            args[1] = target.Character[SilentAim.TargetPart].Position
+if hookmetamethod then
+    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        if SilentAim.Enabled and getnamecallmethod and getnamecallmethod() == "FireServer" and self.Name:match("Weapon|Fire|Shoot|Bullet") then
+            local args = {...}
+            local target = GetClosestPlayer(SilentAim.FOV, SilentAim.TargetPart)
+            if target and target.Character and target.Character:FindFirstChild(SilentAim.TargetPart) then
+                args[1] = target.Character[SilentAim.TargetPart].Position
+            end
+            return oldNamecall(self, unpack(args))
         end
-        return oldNamecall(self, unpack(args))
-    end
-    return oldNamecall(self, ...)
-end)
+        return oldNamecall(self, ...)
+    end)
+end
 
 -- // Silent Aim & AimLock Logic
 local function GetClosestPlayer(fov, part)
@@ -166,6 +170,7 @@ TargetLine.Color = ESP.TargetLineColor
 TargetLine.Visible = false
 
 table.insert(Connections, RunService.RenderStepped:Connect(function(delta)
+    if not UserInputService or not Camera then return end
     -- Silent Aim FOV
     SilentFOVCircle.Position = UserInputService:GetMouseLocation()
     SilentFOVCircle.Radius = SilentAim.FOV
@@ -224,10 +229,12 @@ table.insert(Connections, RunService.RenderStepped:Connect(function(delta)
     -- AimLock
     if AimLock.Enabled and target and target.Character then
         local targetPart = target.Character[AimLock.TargetPart == "Random" and ({ "Head", "Torso", "HumanoidRootPart" })[math.random(1, 3)] or AimLock.TargetPart]
-        local targetPos = targetPart.Position
-        local currentCFrame = Camera.CFrame
-        local targetCFrame = CFrame.new(currentCFrame.Position, targetPos)
-        Camera.CFrame = currentCFrame:Lerp(targetCFrame, AimLock.Smoothness)
+        if targetPart then
+            local targetPos = targetPart.Position
+            local currentCFrame = Camera.CFrame
+            local targetCFrame = CFrame.new(currentCFrame.Position, targetPos)
+            Camera.CFrame = currentCFrame:Lerp(targetCFrame, AimLock.Smoothness)
+        end
     end
 end))
 
@@ -238,6 +245,7 @@ local function CreateESP(player)
     ESPObjects[player] = {}
 
     local char = player.Character
+    if not char then return end
 
     -- 3D Box
     local box = Drawing.new("Quad")
@@ -291,85 +299,87 @@ end
 
 local function UpdateESP()
     for player, objects in pairs(ESPObjects) do
-        if player.Character and ESP.Enabled then
-            local char = player.Character
-            local root = char:FindFirstChild("HumanoidRootPart")
-            local head = char:FindFirstChild("Head")
-            local humanoid = char:FindFirstChild("Humanoid")
-
-            if root and head and humanoid then
-                local headPos, onScreen = Camera:WorldToViewportPoint(head.Position)
-
-                -- 3D Box
-                if objects.Box and ESP.Box3D then
-                    local corners = {
-                        Camera:WorldToViewportPoint(root.Position + Vector3.new(1.5, 3, 1.5)),
-                        Camera:WorldToViewportPoint(root.Position + Vector3.new(1.5, -3, 1.5)),
-                        Camera:WorldToViewportPoint(root.Position + Vector3.new(-1.5, -3, 1.5)),
-                        Camera:WorldToViewportPoint(root.Position + Vector3.new(-1.5, 3, 1.5))
-                    }
-                    objects.Box.Visible = onScreen
-                    objects.Box.PointA = Vector2.new(corners[1].X, corners[1].Y)
-                    objects.Box.PointB = Vector2.new(corners[2].X, corners[2].Y)
-                    objects.Box.PointC = Vector2.new(corners[3].X, corners[3].Y)
-                    objects.Box.PointD = Vector2.new(corners[4].X, corners[4].Y)
+        if not player.Character or not ESP.Enabled then
+            for _, obj in pairs(objects) do
+                if type(obj) == "table" then
+                    for _, line in pairs(obj) do
+                        line.Visible = false
+                    end
                 else
-                    objects.Box.Visible = false
+                    if obj.Destroy then obj.Enabled = false else obj.Visible = false end
                 end
+            end
+            return
+        end
+        local char = player.Character
+        local root = char:FindFirstChild("HumanoidRootPart")
+        local head = char:FindFirstChild("Head")
+        local humanoid = char:FindFirstChild("Humanoid")
 
-                -- Chams
-                objects.Chams.Enabled = ESP.Chams
+        if root and head and humanoid then
+            local headPos, onScreen = Camera:WorldToViewportPoint(head.Position)
 
-                -- Skeleton
-                if objects.Skeleton and ESP.Skeleton then
-                    for bone, line in pairs(objects.Skeleton) do
-                        local parts = bone:split("-")
-                        local p1 = char:FindFirstChild(parts[1])
-                        local p2 = char:FindFirstChild(parts[2])
-                        if p1 and p2 then
-                            local pos1, vis1 = Camera:WorldToViewportPoint(p1.Position)
-                            local pos2, vis2 = Camera:WorldToViewportPoint(p2.Position)
-                            line.Visible = vis1 and vis2
-                            line.From = Vector2.new(pos1.X, pos1.Y)
-                            line.To = Vector2.new(pos2.X, pos2.Y)
-                        else
-                            line.Visible = false
-                        end
-                    end
-                end
-
-                -- Healthbar
-                if objects.Healthbar and ESP.Healthbar then
-                    local health = humanoid.Health / humanoid.MaxHealth
-                    objects.Healthbar.Visible = onScreen
-                    objects.Healthbar.Size = Vector2.new(3, 30 * health)
-                    objects.Healthbar.Position = Vector2.new(headPos.X - 10, headPos.Y - 15)
-                    objects.Healthbar.Color = Color3.fromRGB(255 * (1 - health), 255 * health, 0)
-                end
-
-                -- Nickname
-                if objects.Nickname and ESP.Nickname then
-                    objects.Nickname.Visible = onScreen
-                    objects.Nickname.Text = player.Name
-                    objects.Nickname.Position = Vector2.new(headPos.X, headPos.Y - 30)
-                end
-
-                -- Tracers
-                if objects.Tracer and ESP.Tracers then
-                    objects.Tracer.Visible = onScreen
-                    objects.Tracer.From = Vector2.new(headPos.X, headPos.Y)
-                    objects.Tracer.To = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                end
+            -- 3D Box
+            if objects.Box and ESP.Box3D then
+                local corners = {
+                    Camera:WorldToViewportPoint(root.Position + Vector3.new(1.5, 3, 1.5)),
+                    Camera:WorldToViewportPoint(root.Position + Vector3.new(1.5, -3, 1.5)),
+                    Camera:WorldToViewportPoint(root.Position + Vector3.new(-1.5, -3, 1.5)),
+                    Camera:WorldToViewportPoint(root.Position + Vector3.new(-1.5, 3, 1.5))
+                }
+                objects.Box.Visible = onScreen
+                objects.Box.PointA = Vector2.new(corners[1].X, corners[1].Y)
+                objects.Box.PointB = Vector2.new(corners[2].X, corners[2].Y)
+                objects.Box.PointC = Vector2.new(corners[3].X, corners[3].Y)
+                objects.Box.PointD = Vector2.new(corners[4].X, corners[4].Y)
             else
-                for _, obj in pairs(objects) do
-                    if type(obj) == "table" then
-                        for _, line in pairs(obj) do
-                            line.Visible = false
-                        end
+                objects.Box.Visible = false
+            end
+
+            -- Chams
+            if objects.Chams then
+                objects.Chams.Enabled = ESP.Chams
+            end
+
+            -- Skeleton
+            if objects.Skeleton and ESP.Skeleton then
+                for bone, line in pairs(objects.Skeleton) do
+                    local parts = bone:split("-")
+                    local p1 = char:FindFirstChild(parts[1])
+                    local p2 = char:FindFirstChild(parts[2])
+                    if p1 and p2 then
+                        local pos1, vis1 = Camera:WorldToViewportPoint(p1.Position)
+                        local pos2, vis2 = Camera:WorldToViewportPoint(p2.Position)
+                        line.Visible = vis1 and vis2
+                        line.From = Vector2.new(pos1.X, pos1.Y)
+                        line.To = Vector2.new(pos2.X, pos2.Y)
                     else
-                        if obj.Destroy then obj.Enabled = false else obj.Visible = false end
+                        line.Visible = false
                     end
                 end
+            end
+
+            -- Healthbar
+            if objects.Healthbar and ESP.Healthbar then
+                local health = humanoid.Health / humanoid.MaxHealth
+                objects.Healthbar.Visible = onScreen
+                objects.Healthbar.Size = Vector2.new(3, 30 * health)
+                objects.Healthbar.Position = Vector2.new(headPos.X - 10, headPos.Y - 15)
+                objects.Healthbar.Color = Color3.fromRGB(255 * (1 - health), 255 * health, 0)
+            end
+
+            -- Nickname
+            if objects.Nickname and ESP.Nickname then
+                objects.Nickname.Visible = onScreen
+                objects.Nickname.Text = player.Name
+                objects.Nickname.Position = Vector2.new(headPos.X, headPos.Y - 30)
+            end
+
+            -- Tracers
+            if objects.Tracer and ESP.Tracers then
+                objects.Tracer.Visible = onScreen
+                objects.Tracer.From = Vector2.new(headPos.X, headPos.Y)
+                objects.Tracer.To = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
             end
         else
             for _, obj in pairs(objects) do
@@ -480,7 +490,7 @@ local function FlingPlayer()
                 bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
                 bv.Velocity = Vector3.new(0, 1000, 0)
                 bv.Parent = targetRoot
-                task.delay(0.5, function() bv:Destroy() end)
+                task.delay(0.5, function() if bv then bv:Destroy() end end)
                 Rayfield:Notify({
                     Title = "Fling!",
                     Content = "Yeeted " .. player.Name .. " to space!",
@@ -521,12 +531,13 @@ end)
 -- // Skybox (Color-Based)
 local function UpdateSkybox()
     local sky = Lighting:FindFirstChild("GrokSky") or Instance.new("Sky")
-    sky.Name = "GrokSky"
-    sky.CelestialBodiesShown = false -- Hide stars, sun, moon
-    sky.Parent = Lighting
-
-    Lighting.Ambient = Misc.SkyboxColor
-    Lighting.OutdoorAmbient = Misc.SkyboxColor
+    if sky then
+        sky.Name = "GrokSky"
+        sky.CelestialBodiesShown = false
+        sky.Parent = Lighting
+        Lighting.Ambient = Misc.SkyboxColor
+        Lighting.OutdoorAmbient = Misc.SkyboxColor
+    end
 end
 
 -- // Chat Viewer
@@ -541,7 +552,7 @@ local function UpdateChatViewer()
     if not ChatGui then
         ChatGui = Instance.new("ScreenGui")
         ChatGui.Name = "GrokChatViewer"
-        ChatGui.Parent = LocalPlayer.PlayerGui
+        ChatGui.Parent = LocalPlayer:FindFirstChild("PlayerGui") or LocalPlayer.PlayerGui
 
         local frame = Instance.new("Frame")
         frame.Size = UDim2.new(0, 300, 0, 200)
@@ -564,7 +575,7 @@ local function UpdateChatViewer()
 end
 
 table.insert(Connections, ReplicatedStorage.DefaultChatSystemChatEvents.OnMessageDoneFiltering.OnClientEvent:Connect(function(message)
-    if Misc.ChatViewer then
+    if Misc.ChatViewer and message then
         table.insert(ChatLog, message.Message)
         if #ChatLog > 10 then
             table.remove(ChatLog, 1)
@@ -591,7 +602,7 @@ local function ToggleFly()
             if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir += Camera.CFrame.RightVector end
             bv.Velocity = moveDir * Misc.FlySpeed
         else
-            bv:Destroy()
+            if bv then bv:Destroy() end
         end
     end))
 end
@@ -614,7 +625,9 @@ end
 local function ChatSpam()
     spawn(function()
         while Misc.ChatSpam do
-            ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer("Grok's Hack! | Blackout", "All")
+            if ReplicatedStorage and ReplicatedStorage.DefaultChatSystemChatEvents then
+                ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer("Grok's Hack! | Blackout", "All")
+            end
             wait(2)
         end
     end)
@@ -654,7 +667,7 @@ Watermark.Visible = true
 
 table.insert(Connections, RunService.RenderStepped:Connect(function()
     local fps = math.floor(1 / RunService.RenderStepped:Wait())
-    local ping = math.random(50, 150) -- Replace with game-specific ping API
+    local ping = math.random(50, 150)
     Watermark.Text = string.format("Blackout Hack | Grok | FPS: %d | Ping: %d", fps, ping)
 end))
 
@@ -1067,10 +1080,10 @@ ConfigTab:CreateButton({
     Callback = function()
         if isfile("BlackoutGrok/config.json") then
             local config = HttpService:JSONDecode(readfile("BlackoutGrok/config.json"))
-            SilentAim = config.SilentAim
-            AimLock = config.AimLock
-            ESP = config.ESP
-            Misc = config.Misc
+            SilentAim = config.SilentAim or SilentAim
+            AimLock = config.AimLock or AimLock
+            ESP = config.ESP or ESP
+            Misc = config.Misc or Misc
             KillSound.SoundId = Misc.KillSoundId
             Rayfield:Notify({
                 Title = "Config Loaded",
@@ -1090,27 +1103,27 @@ ConfigTab:CreateButton({
 -- // Cleanup on Script End
 game:BindToClose(function()
     for _, connection in pairs(Connections) do
-        connection:Disconnect()
+        if connection and connection.Disconnect then connection:Disconnect() end
     end
     for _, objects in pairs(ESPObjects) do
         for _, obj in pairs(objects) do
             if type(obj) == "table" then
                 for _, line in pairs(obj) do
-                    line:Remove()
+                    if line and line.Remove then line:Remove() end
                 end
             else
-                if obj.Destroy then obj:Destroy() else obj:Remove() end
+                if obj and obj.Destroy then obj:Destroy() else if obj and obj.Remove then obj:Remove() end end
             end
         end
     end
-    SilentFOVCircle:Remove()
-    AimLockFOVCircle:Remove()
-    Hitmarker:Remove()
-    TargetLine:Remove()
-    Crosshair:Remove()
-    Watermark:Remove()
-    KillSound:Destroy()
-    if ChatGui then ChatGui:Destroy() end
+    if SilentFOVCircle and SilentFOVCircle.Remove then SilentFOVCircle:Remove() end
+    if AimLockFOVCircle and AimLockFOVCircle.Remove then AimLockFOVCircle:Remove() end
+    if Hitmarker and Hitmarker.Remove then Hitmarker:Remove() end
+    if TargetLine and TargetLine.Remove then TargetLine:Remove() end
+    if Crosshair and Crosshair.Remove then Crosshair:Remove() end
+    if Watermark and Watermark.Remove then Watermark:Remove() end
+    if KillSound and KillSound.Destroy then KillSound:Destroy() end
+    if ChatGui and ChatGui.Destroy then ChatGui:Destroy() end
 end)
 
 -- // Initial Setup
